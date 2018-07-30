@@ -7,3 +7,7 @@ It can mostly work with IMU (accelerometer+gyroscope) data, adapt it to the fram
 It was created specifically for this project: https://youtu.be/bg8B0Hl_au0 (Data+Stabilisation)
 
 So it can certainly be improved, maybe turned into a library and include work with the GPS data.
+
+Once your data is exported to csv, open the file, copy the content and you can paste it to an After Effects layer.
+
+Here are some other projects of mine that you might find interesting: http://tailorandwayne.com/coding-projects/
