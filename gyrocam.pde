@@ -7,15 +7,19 @@
 //update if firmware v2.00 adds useful info (shutter spped, iso?)
 
 import processing.video.*;
+import processing.svg.*;
 
 Table table;  //will contain the input gyro file
 Table acclTable;  //will contain the input accelerometer file
+Table gpsTable;  //will contain the input gps file
+ArrayList<PVector> cleanLatLon = new ArrayList<PVector>(); //will contain cleaner gps data
 Table tempTable;  //will contain the input temperature file
 PVector rotation = new PVector (0,0,0);
 float pixelsPerRad = 0;
 float lastMilliseconds = 0;  //time of last info applied
 float acclLastMilliseconds = 0;  //time of last info applied
 float tempLastMilliseconds = 0;  //time of last info applied
+float gpsLastMilliseconds = 0;
 int currentFrame = 0;  
 int lastRow = 0;  
 float realWidth;  //deduced from conditional realheight and sketch ratio
@@ -29,7 +33,8 @@ boolean setupFinished = false;
 boolean finishingSetup = false;
 boolean skipMovie = false;
 int acclLastRow = 0;  //to read accl csv
-int tempLastRow = 0;  //to read accl csv
+int tempLastRow = 0;  //to read temp csv
+int gpsLastRow = 0;  //to read gps csv
 float tempDisplay = 0; 
 int totalFrames;
 Table AERotation;  //table for exporting sensor values per frame
@@ -38,6 +43,7 @@ Table AEgForce;  //will contain the output g-force for after effects
 Table AErpm;  //will contain the output rpm for after effects
 Table AEvibr;  //will contain the output vibrations for after effects visualisation
 Table AEvibrhz;  //will contain the output vibrations in hertz for after effects display value
+Table AELocations;  //table for exporting gps values per frame
 int finishedCSVs = 0;//how many csv documents for AE are completed?
 float vibrhz =0;//stores vibrations in frequency
 PVector acclLast = new PVector(0,0,0);//stores the previous acceleration vector to measure vibration
@@ -47,7 +53,7 @@ float vibrDisplay; //will contain the vibrations per second (hz) of a frame
 //Customisable
 //IMPORTANT
 //NOTE: remember to set the proper sketch size for your video in setup()
-String filename = "GOPR0083";//file to search for, common to all files
+String filename = "GPFR0079";//file to search for, common to all files
 float vFov = 69.7;
 //vertical field of view in degrees. H5 Session 16:9 = 69.7 |||||| 4:3 = 94.5  https://gopro.com/help/articles/Question_Answer/HERO5-Session-Field-of-View-FOV-Information
 // H5 Black: https://gopro.com/help/articles/Question_Answer/HERO5-Black-Field-of-View-FOV-Information
@@ -164,6 +170,39 @@ void setup() {
     newRow.setString(0, "Transform");
     newRow.setString(1, "Rotation");
     newRow = AERotation.addRow();
+    newRow.setString(1, "Frame");
+    newRow.setString(2, "degrees");
+    
+    AELocations = new Table();
+    AELocations.addColumn();  //will AE info
+    AELocations.addColumn();  //will contain frame number
+    AELocations.addColumn();  //will contain GyroZ
+    
+    newRow = AELocations.addRow();
+    newRow.setString(0, "Adobe After Effects 8.0 Keyframe Data");
+    newRow = AELocations.addRow();
+    newRow.setString(0, "");
+    newRow = AELocations.addRow();
+    newRow.setString(1, "Units Per Second");
+    newRow.setFloat(2, goproRate);
+    newRow = AELocations.addRow();
+    newRow.setString(1, "Source Width");
+    newRow.setInt(2, 100);
+    newRow = AELocations.addRow();
+    newRow.setString(1, "Source Height");
+    newRow.setInt(2, 100);
+    newRow = AELocations.addRow();
+    newRow.setString(1, "Source Pixel Aspect Ratio");
+    newRow.setInt(2, 1);
+    newRow = AELocations.addRow();
+    newRow.setString(1, "Comp Pixel Aspect Ratio");
+    newRow.setInt(2, 1);
+    newRow = AELocations.addRow();
+    newRow.setString(0, "");
+    newRow = AELocations.addRow();
+    newRow.setString(0, "Transform");
+    newRow.setString(1, "Rotation");
+    newRow = AELocations.addRow();
     newRow.setString(1, "Frame");
     newRow.setString(2, "degrees");
     
@@ -391,7 +430,94 @@ void finishSetup() {  //we need to receive a movie frame to use its info (durati
     tempLastRow = checkRow;
   }
   
+  File gpsFile = new File(dataPath(filename+"-gps.csv"));  //try to load CSV file
+  if (gpsFile.exists()) {
+    gpsTable = loadTable(filename+"-gps.csv", "header");
+    //load gps data
+    float currentMilliseconds = ((float(firstDataFrame))*(1000f/goproRate))+offset;//time we start at
+    int checkRow = 0;
+    while (float(gpsTable.getRow(checkRow).getString("Milliseconds")) < currentMilliseconds) {  //get rows under our time
+      checkRow++;
+      gpsLastMilliseconds = float(gpsTable.getRow(checkRow).getString("Milliseconds"));  //save current time
+    }
+    gpsLastRow = checkRow;
+    
+    if (gpsTable.getRowCount() > 1) {
+      PGraphics svg = createGraphics(1080, 1080, SVG, filename+"-latlong.svg");
+      svg.beginDraw();
+      PVector pre = null;
+      PVector max = new PVector(-180,-90);
+      PVector min = new PVector(180,90);
+      for (TableRow row : gpsTable.rows()) {
+        PVector curr = new PVector(row.getFloat("Longitude"),row.getFloat("Latitude"),row.getFloat("Altitude"));
+        int accuracy = row.getInt("GpsAccuracy");
+        if (accuracy < 1000) {
+          if (curr.x > max.x) max.x = curr.x;
+          if (-curr.y > max.y) max.y = -curr.y;
+          if (curr.x < min.x) min.x = curr.x;
+          if (-curr.y < min.y) min.y = -curr.y;
+          cleanLatLon.add(curr.copy());
+        } else {
+          cleanLatLon.add(null);
+        }
+      }
+      cleanLatLon = cleanLocations(cleanLatLon);
+      PVector diff = PVector.sub(max,min);
+      float factor = diff.x/diff.y;
+      for (int i=0; i<cleanLatLon.size();i++) {
+        PVector curr = new PVector(cleanLatLon.get(i).x,cleanLatLon.get(i).y);
+        curr.x = map(curr.x,min.x,max.x,0,1080);
+        curr.y = map(-curr.y,min.y,max.y,0,1080);
+        if (factor > 1) {
+          curr.y /= factor;
+        } else {
+          curr.y *= factor;
+        }
+        
+        if (pre != null) {
+          svg.line(pre.x, pre.y, curr.x, curr.y);
+        }
+        pre = curr.copy();
+      }
+      svg.dispose();
+      svg.endDraw();
+    }
+  }
+  
   setupFinished = true;
+}
+
+ArrayList<PVector> cleanLocations(ArrayList<PVector> list) {
+  PVector pre = new PVector(1000,1000);
+  for (int i=0; i<list.size(); i++) {
+    PVector curr = list.get(i);
+    if (curr == null) {
+      int steps;
+      PVector destination = null;
+      for (steps = 1; steps<list.size();steps++) {
+        destination = list.get(steps);
+        if (destination != null) {
+          break;
+        }
+      }
+      if (pre.x != 1000) {//not first valid value
+        if (destination != null) {  //there is a next valid value
+          curr = new PVector(pre.x + (destination.x-pre.x)/(steps+1),pre.y + (destination.y-pre.y)/(steps+1));
+        } else {  //no next valid value
+          curr = pre.copy();
+        } 
+      } else { //still no valid value
+        if (destination != null) {  //there is a next valid value
+          curr = destination.copy();
+        } else {  //no next valid value
+        } 
+      }
+      
+    }
+    if (curr != null) pre = curr.copy();
+    list.set(i,curr);
+  }
+  return list;
 }
 
 void draw() {
@@ -469,7 +595,7 @@ void draw() {
         if (CSVinstead) {
           println("Finished Gyro CSV");
           finishedCSVs++;
-          if (finishedCSVs >= 3) {
+          if (finishedCSVs >= 4) {
             finishCSVs();
           }
         } else {
@@ -515,7 +641,7 @@ void draw() {
             if (CSVinstead) {
               println("Finished Accel CSV");
               finishedCSVs++;
-              if (finishedCSVs >= 3) {
+              if (finishedCSVs >= 4) {
                 finishCSVs();
               }
               break;
@@ -545,7 +671,7 @@ void draw() {
             if (CSVinstead) {
               println("Finished Temp CSV");
               finishedCSVs++;
-              if (finishedCSVs >= 3) {
+              if (finishedCSVs >= 4) {
                 finishCSVs();
               }
             } else {
@@ -556,17 +682,78 @@ void draw() {
         }
       }
       
+      //gps calculations AQUII
+      PVector gpsDisplay = new PVector(0,0,0);  //will pass it to the display function
+      if (gpsLastRow < gpsTable.getRowCount()) {
+        
+        ///////////////////////////////////////
+        
+        float gpsFrameTime = 0;//will remember total time of frame, independent of framerate, just in case
+        ArrayList<float[]> gpsVectors = new ArrayList<float[]>();  //store the data to apply it proportionally after looping through all valid rows, for displaying it. Will be in rad/s, while the one for stabilisation (rotation) is in rad. so better not mixed
+        while (float(gpsTable.getRow(gpsLastRow).getString("Milliseconds")) < currentMilliseconds) {  //get rows under our time
+          float millisecondsDifference = (float(gpsTable.getRow(gpsLastRow).getString("Milliseconds"))-lastMilliseconds)/1000f;  //how much time since last gps?
+          lastMilliseconds = float(gpsTable.getRow(gpsLastRow).getString("Milliseconds"));  //save current time
+          float[] gpsRow = { cleanLatLon.get(gpsLastRow).x,cleanLatLon.get(gpsLastRow).y,cleanLatLon.get(gpsLastRow).z,millisecondsDifference};  //store all the relevant data of the row
+          gpsVectors.add( gpsRow );  //save in the arraylist
+          gpsLastRow++;  //next row
+          gpsFrameTime += millisecondsDifference;
+          if (gpsLastRow >= gpsTable.getRowCount()) {
+            println("Gps CSV finished before video");
+            break;
+          } 
+        }
+        
+        if (gpsVectors.size() < 1) {
+          if (gpsLastRow+1 < gpsTable.getRowCount() && gpsLastRow > 0) {
+            float millisecondsDifference = (float(gpsTable.getRow(gpsLastRow).getString("Milliseconds"))-lastMilliseconds)/1000f;  //how much time since last gps?
+            float nextRowTime = float(gpsTable.getRow(gpsLastRow).getString("Milliseconds"));
+            float timeTillNext = nextRowTime - lastMilliseconds;
+            float lerping = millisecondsDifference / timeTillNext;
+            gpsDisplay.x = lerp(cleanLatLon.get(gpsLastRow).x, cleanLatLon.get(gpsLastRow+1).x, lerping);
+            gpsDisplay.y = lerp(cleanLatLon.get(gpsLastRow).y, cleanLatLon.get(gpsLastRow+1).y, lerping);
+            gpsDisplay.z = lerp(cleanLatLon.get(gpsLastRow).z, cleanLatLon.get(gpsLastRow+1).z, lerping);
+          } else if (gpsLastRow+1 >= gpsTable.getRowCount()) {
+            gpsDisplay = cleanLatLon.get(gpsLastRow).copy();
+          } else {
+            gpsDisplay = cleanLatLon.get(gpsLastRow+1).copy();
+          }
+        }
+        
+        for (int i = 0; i < gpsVectors.size() ; i++) {
+          gpsDisplay.x = (gpsVectors.get(i)[0]*(gpsVectors.get(i)[3]/gpsFrameTime));  //multiply each row's gps by its proportional weight in the frame time, probably more accurate if the gps pace is not constant between frames/hertz
+          gpsDisplay.y = (gpsVectors.get(i)[1]*(gpsVectors.get(i)[3]/gpsFrameTime));
+          gpsDisplay.z = (gpsVectors.get(i)[2]*(gpsVectors.get(i)[3]/gpsFrameTime));
+        }
+
+      } else {
+        
+        if (CSVinstead) {
+          println("Finished gps CSV");
+          finishedCSVs++;
+          if (finishedCSVs >= 4) {
+            finishCSVs();
+          }
+        } else {
+          println("Skipping CSV");
+        }
+      
+        
+      }
+      
       TableRow newRowPos = null;
       TableRow newRowRot = null;
       TableRow newRowG = null;
       TableRow newRowRpm = null;
       TableRow newRowVibr = null;
       TableRow newRowVibrhz = null;
+      TableRow newRowLoc = null;
       if (CSVinstead) {  //create new CSV row
         newRowPos = AEPosition.addRow();
         newRowPos.setInt(1, currentFrame+1);
         newRowRot = AERotation.addRow();
         newRowRot.setInt(1, currentFrame+1);
+        newRowLoc = AELocations.addRow();
+        newRowLoc.setInt(1, currentFrame+1);
         newRowG = AEgForce.addRow();
         newRowG.setInt(1, currentFrame+1);
         newRowRpm = AErpm.addRow();
@@ -663,6 +850,9 @@ void draw() {
           float average = total/AEgForces.length;
           newRowG.setFloat(2, average);
           
+          //aqui copy accl model?
+          //to newRowLoc
+          
           //rpms
           for (int i=AErpms.length-1; i>0 ; i--) {
             AErpms[i] = AErpms[i-1];
@@ -684,7 +874,7 @@ void draw() {
           newRowVibr.setFloat(3, acclDisplay.x);
           newRowVibr.setFloat(4, acclDisplay.z);
           
-          //rpms
+          //
           for (int i=AEvibrhzs.length-1; i>0 ; i--) {
             AEvibrhzs[i] = AEvibrhzs[i-1];
           }
@@ -716,13 +906,13 @@ void draw() {
         popMatrix();
       
       if (embedData) {  //print data on screen if not printed on image
-        displayData(gyroDisplay,acclDisplay,tempDisplay,vibrDisplay);  //display metadata after saving the image
+        displayData(gyroDisplay,acclDisplay,tempDisplay,vibrDisplay,gpsDisplay);  //display metadata after saving the image
       }
       if (!CSVinstead) {
         saveFrame(filename+"-Out-"+nf(currentFrame,digits)+fileType);    //save it
       }
       if (!embedData) {  //print data on screen if not printed on image
-        displayData(gyroDisplay,acclDisplay, tempDisplay, vibrDisplay);  //display metadata after saving the image
+        displayData(gyroDisplay,acclDisplay, tempDisplay, vibrDisplay,gpsDisplay);  //display metadata after saving the image
       }
       displayData2();  //display dnon embeddable data
       currentFrame++;  //next frame
@@ -746,8 +936,8 @@ static final String nfj(final float n, final int l, final int r) {
     s.replaceFirst("-", " ") : s;
 }
 
-void displayData(PVector g,PVector a, float t, float v) {  //display metadata
-  String text = "GyroX:"+nfj(g.x,0,2)+"RPM\nGyroY:"+nfj(g.y,0,2)+"RPM\n"+"GyroZ:"+nfj(g.z,0,2)+"RPM\nGyro:"+nfj(g.mag(),0,2)+"RPM\nAcclX:"+nfj(a.x,0,3)+"G\nAcclY:"+nfj(a.y,0,3)+"G\nAcclZ:"+nfj(a.z,0,3)+"G\nAccl:"+nfj(a.mag(),0,3)+"G\nVibr:"+nfj(v,0,1)+"Hz\nTemp:"+nfj(t,0,1)+"ºC";
+void displayData(PVector g,PVector a, float t, float v, PVector gp) {  //display metadata
+  String text = "GyroX:"+nfj(g.x,0,2)+"RPM\nGyroY:"+nfj(g.y,0,2)+"RPM\n"+"GyroZ:"+nfj(g.z,0,2)+"RPM\nGyro:"+nfj(g.mag(),0,2)+"RPM\nAcclX:"+nfj(a.x,0,3)+"G\nAcclY:"+nfj(a.y,0,3)+"G\nAcclZ:"+nfj(a.z,0,3)+"G\nAccl:"+nfj(a.mag(),0,3)+"G\nVibr:"+nfj(v,0,1)+"Hz\nTemp:"+nfj(t,0,1)+"ºC\nLon:"+gp.x+"\nLat:"+gp.y+"\nAlt:"+gp.z;
   int shadow = 1;//distance to shadow
   textSize(12);
   textAlign(LEFT,TOP);  
@@ -829,6 +1019,14 @@ void finishCSVs() {
                 newRow = AERotation.addRow();
                 newRow.setString(0, "End of Keyframe Data");
                 saveTable(AERotation, filename+"-AErotation.csv");
+                
+                newRow = AELocations.addRow();
+                newRow.setString(0, "");
+                newRow = AELocations.addRow();
+                newRow.setString(0, "");
+                newRow = AELocations.addRow();
+                newRow.setString(0, "End of Keyframe Data");
+                saveTable(AELocations, filename+"-AElocations.csv");
                 
                 newRow = AEgForce.addRow();
                 newRow.setString(0, "");
