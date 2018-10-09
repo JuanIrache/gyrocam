@@ -1,7 +1,4 @@
-//To export GoPro metadata: https://community.gopro.com/t5/Hero5-Metadata-Visualisation/gp-p/Hero5MetadataVisualisation
-//ffmpeg -y -i filename.MP4 -codec copy -map 0:3 -f rawvideo filename.bin
-//gpmdinfo -i filename.bin
-//credit for the data extraction goes to https://github.com/stilldavid/gopro-utils
+//To export GoPro metadata: https://tailorandwayne.com/GPMD2CSV
 
 //TODO
 
@@ -11,7 +8,7 @@ import processing.svg.*;
 //Customisable
 //IMPORTANT
 //NOTE: remember to set the proper sketch size for your video in setup()
-String[] filenames = {/*"GPFR0079",*/"GF010079"};//file to search for, common to all files. Add more filenames separated by commas if you want to merge them first
+String[] filenames = {"GPFR0079","GF010079"};//file to search for, common to all files. Add more filenames separated by commas if you want to merge them first
 float vFov = 69.7;
 //vertical field of view in degrees. H5 Session 16:9 = 69.7 |||||| 4:3 = 94.5  https://gopro.com/help/articles/Question_Answer/HERO5-Session-Field-of-View-FOV-Information
 // H5 Black: https://gopro.com/help/articles/Question_Answer/HERO5-Black-Field-of-View-FOV-Information
@@ -489,8 +486,8 @@ void finishSetup() {  //we need to receive a movie frame to use its info (durati
     
     if (gpsTable.getRowCount() > 1) {
       locPre = null;
-      locMax = new PVector(-180,-90);
-      locMin = new PVector(180,90);
+      locMax = new PVector(-180f,-90f);
+      locMin = new PVector(180f,90f);
       for (TableRow row : gpsTable.rows()) {
         PVector curr = new PVector(row.getFloat("Longitude"),row.getFloat("Latitude"),row.getFloat("Altitude"));
         int accuracy = row.getInt("GpsAccuracy");
@@ -505,6 +502,7 @@ void finishSetup() {  //we need to receive a movie frame to use its info (durati
         }
       }
       cleanLatLon = cleanLocations(cleanLatLon);
+
       locDiff = PVector.sub(locMax,locMin);
       locFactor = locDiff.x/locDiff.y;
       PGraphics svg = createGraphics(1080, 1080, SVG,"exports/"+ filenames[0]+"-latlong.svg");
@@ -992,11 +990,12 @@ void displayData(PVector g,PVector a, float t, float v, PVector gp) {  //display
     text(text, 10, 30); //then text
     stroke(255,10);
     strokeWeight(1);
-    translate(width-20-height/3,height-20-height/3);
-    for (int i=0; i<cleanLatLon.size()-2;i++) {
+    translate(width-60-height/3,height-30-height/3);
+    locPre = null;
+    for (int i=0; i<cleanLatLon.size();i++) {
         PVector curr = new PVector(cleanLatLon.get(i).x,cleanLatLon.get(i).y);
-        curr.x = map(curr.x,locMin.x,locMax.x,0,height/3);
-        curr.y = map(-curr.y,locMin.y,locMax.y,0,height/3);
+        curr.x = map(curr.x,locMin.x,locMax.x,0f,height/3f);
+        curr.y = map(-curr.y,locMin.y,locMax.y,0f,height/3f);
         if (locFactor > 1) {
           curr.y /= locFactor;
         } else {
@@ -1013,8 +1012,8 @@ void displayData(PVector g,PVector a, float t, float v, PVector gp) {  //display
       strokeWeight(2);
       for (int j=0; j< gpsFramesArr.size();j++) {
         PVector curr = gpsFramesArr.get(j).copy();
-        curr.x = map(curr.x,locMin.x,locMax.x,0,height/3);
-        curr.y = map(-curr.y,locMin.y,locMax.y,0,height/3);
+        curr.x = map(curr.x,locMin.x,locMax.x,0f,height/3f);
+        curr.y = map(-curr.y,locMin.y,locMax.y,0f,height/3f);
         if (locFactor > 1) {
           curr.y /= locFactor;
         } else {
