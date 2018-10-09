@@ -4,10 +4,48 @@
 //credit for the data extraction goes to https://github.com/stilldavid/gopro-utils
 
 //TODO
-//update if firmware v2.00 adds useful info (shutter spped, iso?)
 
 import processing.video.*;
 import processing.svg.*;
+
+//Customisable
+//IMPORTANT
+//NOTE: remember to set the proper sketch size for your video in setup()
+String[] filenames = {/*"GPFR0079",*/"GF010079"};//file to search for, common to all files. Add more filenames separated by commas if you want to merge them first
+float vFov = 69.7;
+//vertical field of view in degrees. H5 Session 16:9 = 69.7 |||||| 4:3 = 94.5  https://gopro.com/help/articles/Question_Answer/HERO5-Session-Field-of-View-FOV-Information
+// H5 Black: https://gopro.com/help/articles/Question_Answer/HERO5-Black-Field-of-View-FOV-Information
+
+//OPTIONAL
+boolean CSVinstead = true;  //export csv with relevant values for use in After Effects or anywhere else. Differs from the input csv because the calculations are applied per frame
+float goproRate = 25f;  //framerate of video will be overwritten if a video file with a different framerate is present. Important when working with frames only or csv only
+PVector drift = new PVector(-0.0115070922,0.0090878531,0.0029803664); //rads per second that we should compensate. Might vary per camera and situation. Measured by sitting still and looking at the average values in the csv.
+//The H5 does not have enough sensors to guess the absolute orientation, and there appears to be some drift caused by small inaccuracies that add up so an always flat horizon is only possible by manually adjusting drift, maybe)
+//the gyro sensor maxes out at 8.7262316911 rad/s (83.33rpm) above that, calculations are wrong
+PVector adjustAccl = new PVector(0.3071090151,-0.0826711669,0.1142378056);  //Accelerometer bias. Measured by leaving the camera flat on each side minus gravity. Might not be constant nor proportional. Might vary per camera
+//Accl sensor maxes out at 78.3899521531 m/s2 (about 8G). Above that, data will be incorrect
+float magnify = 1; //increase size to hide borders (there are better ways to hide / regenerate borders, with video editing software). 1 = no resize.
+boolean embedData = false;  //whether or not metadata is printed on the output images (you see it anyway)
+int firstDataFrame = 0;  //first frame to analyse from original GoPro file
+boolean dataVideoSync = true; // False to start frames at 0 when stills have been extracted as a section of the original GoPro file
+float rotationZoffset = radians(0);  //if horizon is generally tilted, compensate here. Radians
+float realHeight = 0;//zero for auto (non optically corrected clips) //real use in pixels of the fov in the input file (useful when optically compensated) - (check in After Effects)
+int offset = -30;//in milliseconds, can be float for better adjustment. difference in time between frames and csvs
+String fileType = ".jpg";//extension
+String videoFileType = ".mp4";//if loading from a video
+int digits = 3;//number of zeros. Will be overwritten if frames are extracted from the video file
+boolean rescale = false;  //scale to sketch size, independent of magnify. Useful when source is larger than sketch
+float smooth = .95;//reduce x and y rotation progressively, 1 for not smoothing (image goes back to centre after a correction)
+float smoothZ= .95;//reduce z rotation progressively, 1 = no reduction, 0 = no rotation
+float limitY = .02;//limit movement per axis to percentage of image/angle. -1 = no limit. ie, avoid displaying too much margins
+float limitX = .03;//if optically compensated, X can be wider
+float limitZ = .06;//not really a percentage, -1 FOR FLAT HORIZON (MotoGP gyrocam style.
+float[] AEgForces = new float[5];  //we will average data for smoothing
+float[] AErpms = new float[5];  //we will average data for smoothing
+float[] AEvibrhzs = new float[30];  //we will average data for smoothing
+float vibrTreshold = 1; //subjective, when to start considering an acceleration change a vibration
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 Table table;  //will contain the input gyro file
 Table acclTable;  //will contain the input accelerometer file
@@ -44,51 +82,19 @@ Table AErpm;  //will contain the output rpm for after effects
 Table AEvibr;  //will contain the output vibrations for after effects visualisation
 Table AEvibrhz;  //will contain the output vibrations in hertz for after effects display value
 Table AELocations;  //table for exporting gps values per frame
+ArrayList<PVector> gpsFramesArr = new ArrayList<PVector>();
 int finishedCSVs = 0;//how many csv documents for AE are completed?
 float vibrhz =0;//stores vibrations in frequency
 PVector acclLast = new PVector(0,0,0);//stores the previous acceleration vector to measure vibration
 float vibrDisplay; //will contain the vibrations per second (hz) of a frame
-
-
-//Customisable
-//IMPORTANT
-//NOTE: remember to set the proper sketch size for your video in setup()
-String[] filenames = {"GPFR0079","GF010079"};//file to search for, common to all files. Add more filenames separated by commas if you want to merge them first
-float vFov = 69.7;
-//vertical field of view in degrees. H5 Session 16:9 = 69.7 |||||| 4:3 = 94.5  https://gopro.com/help/articles/Question_Answer/HERO5-Session-Field-of-View-FOV-Information
-// H5 Black: https://gopro.com/help/articles/Question_Answer/HERO5-Black-Field-of-View-FOV-Information
-
-//OPTIONAL
-boolean CSVinstead = true;  //export csv with relevant values for use in After Effects or anywhere else. Differs from the input csv because the calculations are applied per frame
-float goproRate = 25f;  //framerate of video will be overwritten if a video file with a different framerate is present. Important when working with frames only or csv only
-PVector drift = new PVector(-0.0115070922,0.0090878531,0.0029803664); //rads per second that we should compensate. Might vary per camera and situation. Measured by sitting still and looking at the average values in the csv.
-//The H5 does not have enough sensors to guess the absolute orientation, and there appears to be some drift caused by small inaccuracies that add up so an always flat horizon is only possible by manually adjusting drift, maybe)
-//the gyro sensor maxes out at 8.7262316911 rad/s (83.33rpm) above that, calculations are wrong
-PVector adjustAccl = new PVector(0.3071090151,-0.0826711669,0.1142378056);  //Accelerometer bias. Measured by leaving the camera flat on each side minus gravity. Might not be constant nor proportional. Might vary per camera
-//Accl sensor maxes out at 78.3899521531 m/s2 (about 8G). Above that, data will be incorrect
-float magnify = 1; //increase size to hide borders (there are better ways to hide / regenerate borders, with video editing software). 1 = no resize.
-boolean embedData = false;  //whether or not metadata is printed on the output images (you see it anyway)
-int firstDataFrame = 0;  //first frame to analyse from original GoPro file
-boolean dataVideoSync = true; // False to start frames at 0 when stills have been extracted as a section of the original GoPro file
-float rotationZoffset = radians(0);  //if horizon is generally tilted, compensate here. Radians
-float realHeight = 0;//zero for auto (non optically corrected clips) //real use in pixels of the fov in the input file (useful when optically compensated) - (check in After Effects)
-int offset = -30;//in milliseconds, can be float for better adjustment. difference in time between frames and csvs
-String fileType = ".jpg";//extension
-String videoFileType = ".mp4";//if loading from a video
-int digits = 3;//number of zeros. Will be overwritten if frames are extracted from the video file
-boolean rescale = false;  //scale to sketch size, independent of magnify. Useful when source is larger than sketch
-float smooth = .95;//reduce x and y rotation progressively, 1 for not smoothing (image goes back to centre after a correction)
-float smoothZ= .95;//reduce z rotation progressively, 1 = no reduction, 0 = no rotation
-float limitY = .02;//limit movement per axis to percentage of image/angle. -1 = no limit. ie, avoid displaying too much margins
-float limitX = .03;//if optically compensated, X can be wider
-float limitZ = .06;//not really a percentage, -1 FOR FLAT HORIZON (MotoGP gyrocam style.
-float[] AEgForces = new float[5];  //we will average data for smoothing
-float[] AErpms = new float[5];  //we will average data for smoothing
-float[] AEvibrhzs = new float[30];  //we will average data for smoothing
-float vibrTreshold = 1; //subjective, when to start considering an acceleration change a vibration
+PVector locPre;
+PVector locDiff;
+float locFactor;
+PVector locMax;
+PVector locMin;
 
 void setup() {
-  size(5992, 2398);  //if exporting images, needs the same ratio as the input usable area, 16:9 4:3 etc
+  size(1920, 1080);  //if exporting images, needs the same ratio as the input usable area, 16:9 4:3 etc
   imageMode(CENTER);  //draw from centre
   if (realHeight == 0) {
     realHeight = height;
@@ -482,41 +488,41 @@ void finishSetup() {  //we need to receive a movie frame to use its info (durati
     gpsLastRow = checkRow;
     
     if (gpsTable.getRowCount() > 1) {
-      PGraphics svg = createGraphics(1080, 1080, SVG, filenames[0]+"-latlong.svg");
-      svg.beginDraw();
-      PVector pre = null;
-      PVector max = new PVector(-180,-90);
-      PVector min = new PVector(180,90);
+      locPre = null;
+      locMax = new PVector(-180,-90);
+      locMin = new PVector(180,90);
       for (TableRow row : gpsTable.rows()) {
         PVector curr = new PVector(row.getFloat("Longitude"),row.getFloat("Latitude"),row.getFloat("Altitude"));
         int accuracy = row.getInt("GpsAccuracy");
         if (accuracy < 1000) {
-          if (curr.x > max.x) max.x = curr.x;
-          if (-curr.y > max.y) max.y = -curr.y;
-          if (curr.x < min.x) min.x = curr.x;
-          if (-curr.y < min.y) min.y = -curr.y;
+          if (curr.x > locMax.x) locMax.x = curr.x;
+          if (-curr.y > locMax.y) locMax.y = -curr.y;
+          if (curr.x < locMin.x) locMin.x = curr.x;
+          if (-curr.y < locMin.y) locMin.y = -curr.y;
           cleanLatLon.add(curr.copy());
         } else {
           cleanLatLon.add(null);
         }
       }
       cleanLatLon = cleanLocations(cleanLatLon);
-      PVector diff = PVector.sub(max,min);
-      float factor = diff.x/diff.y;
+      locDiff = PVector.sub(locMax,locMin);
+      locFactor = locDiff.x/locDiff.y;
+      PGraphics svg = createGraphics(1080, 1080, SVG,"exports/"+ filenames[0]+"-latlong.svg");
+      svg.beginDraw();
       for (int i=0; i<cleanLatLon.size();i++) {
         PVector curr = new PVector(cleanLatLon.get(i).x,cleanLatLon.get(i).y);
-        curr.x = map(curr.x,min.x,max.x,0,1080);
-        curr.y = map(-curr.y,min.y,max.y,0,1080);
-        if (factor > 1) {
-          curr.y /= factor;
+        curr.x = map(curr.x,locMin.x,locMax.x,0,1080);
+        curr.y = map(-curr.y,locMin.y,locMax.y,0,1080);
+        if (locFactor > 1) {
+          curr.y /= locFactor;
         } else {
-          curr.y *= factor;
+          curr.y *= locFactor;
         }
         
-        if (pre != null) {
-          svg.line(pre.x, pre.y, curr.x, curr.y);
+        if (locPre != null) {
+          svg.line(locPre.x, locPre.y, curr.x, curr.y);
         }
-        pre = curr.copy();
+        locPre = curr.copy();
       }
       svg.dispose();
       svg.endDraw();
@@ -890,6 +896,8 @@ void draw() {
           newRowLoc.setFloat(3,gpsDisplay.y);
           newRowLoc.setFloat(4,gpsDisplay.z);
           
+          gpsFramesArr.add(gpsDisplay);
+          
           //rpms
           for (int i=AErpms.length-1; i>0 ; i--) {
             AErpms[i] = AErpms[i-1];
@@ -951,7 +959,6 @@ void draw() {
       if (!embedData) {  //print data on screen if not printed on image
         displayData(gyroDisplay,acclDisplay, tempDisplay, vibrDisplay,gpsDisplay);  //display metadata after saving the image
       }
-      displayData2();  //display dnon embeddable data
       currentFrame++;  //next frame
     } else {  //end of video
       println("Video finished");
@@ -974,26 +981,51 @@ static final String nfj(final float n, final int l, final int r) {
 }
 
 void displayData(PVector g,PVector a, float t, float v, PVector gp) {  //display metadata
-  String text = "GyroX:"+nfj(g.x,0,2)+"RPM\nGyroY:"+nfj(g.y,0,2)+"RPM\n"+"GyroZ:"+nfj(g.z,0,2)+"RPM\nGyro:"+nfj(g.mag(),0,2)+"RPM\nAcclX:"+nfj(a.x,0,3)+"G\nAcclY:"+nfj(a.y,0,3)+"G\nAcclZ:"+nfj(a.z,0,3)+"G\nAccl:"+nfj(a.mag(),0,3)+"G\nVibr:"+nfj(v,0,1)+"Hz\nTemp:"+nfj(t,0,1)+"ºC\nLon: "+gp.x+"\nLat: "+gp.y+"\nAlt: "+gp.z;
-  int shadow = 1;//distance to shadow
-  textSize(12);
-  textAlign(LEFT,TOP);  
-  fill(0);
-  text(text, 10+shadow, 30+shadow); //draw shadow first
-  fill(255);
-  text(text, 10, 30); //then text
-}
-
-void displayData2() {  //info for user, not for printing
-  int shadow = 1;//distance to shadow
-  String text = "";  //add data to display here
-  textSize(12);
-  textAlign(RIGHT,BOTTOM);  
-  fill(0);
-  text(text, width-10+shadow, height-30+shadow); //draw shadow first
-  fill(255);
-  text(text, width-10, height-30); //then text
-  textAlign(LEFT,TOP); 
+  if (setupFinished) {
+    String text = "GyroX:"+nfj(g.x,0,2)+"RPM\nGyroY:"+nfj(g.y,0,2)+"RPM\n"+"GyroZ:"+nfj(g.z,0,2)+"RPM\nGyro:"+nfj(g.mag(),0,2)+"RPM\nAcclX:"+nfj(a.x,0,3)+"G\nAcclY:"+nfj(a.y,0,3)+"G\nAcclZ:"+nfj(a.z,0,3)+"G\nAccl:"+nfj(a.mag(),0,3)+"G\nVibr:"+nfj(v,0,1)+"Hz\nTemp:"+nfj(t,0,1)+"ºC\nLon: "+gp.x+"\nLat: "+gp.y+"\nAlt: "+gp.z;
+    int shadow = 1;//distance to shadow
+    textSize(12);
+    textAlign(LEFT,TOP);  
+    fill(0);
+    text(text, 10+shadow, 30+shadow); //draw shadow first
+    fill(255);
+    text(text, 10, 30); //then text
+    stroke(255,10);
+    strokeWeight(1);
+    translate(width-20-height/3,height-20-height/3);
+    for (int i=0; i<cleanLatLon.size()-2;i++) {
+        PVector curr = new PVector(cleanLatLon.get(i).x,cleanLatLon.get(i).y);
+        curr.x = map(curr.x,locMin.x,locMax.x,0,height/3);
+        curr.y = map(-curr.y,locMin.y,locMax.y,0,height/3);
+        if (locFactor > 1) {
+          curr.y /= locFactor;
+        } else {
+          curr.y *= locFactor;
+        }
+        
+        if (locPre != null) {
+          line(locPre.x, locPre.y, curr.x, curr.y);
+        }
+        locPre = curr.copy();
+      }
+      PVector pre = null;
+      stroke(255);
+      strokeWeight(2);
+      for (int j=0; j< gpsFramesArr.size();j++) {
+        PVector curr = gpsFramesArr.get(j).copy();
+        curr.x = map(curr.x,locMin.x,locMax.x,0,height/3);
+        curr.y = map(-curr.y,locMin.y,locMax.y,0,height/3);
+        if (locFactor > 1) {
+          curr.y /= locFactor;
+        } else {
+          curr.y *= locFactor;
+        }
+        if (pre != null) {
+          line(pre.x, pre.y, curr.x, curr.y);
+        }
+        pre = curr.copy();
+      }
+  }
 }
 
 void movieEvent(Movie m) { //when a frame is ready
