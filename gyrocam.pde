@@ -501,7 +501,20 @@ void finishSetup() {  //we need to receive a movie frame to use its info (durati
           cleanLatLon.add(null);
         }
       }
+      
       cleanLatLon = cleanLocations(cleanLatLon);
+      
+      //aqui remove this debugging
+      String[] strings = new String[cleanLatLon.size()-1];
+      for (int i=0; i<cleanLatLon.size()-1; i++) {
+        if (cleanLatLon.get(i) != null) {
+          strings[i] = cleanLatLon.get(i).x+","+cleanLatLon.get(i).y+","+cleanLatLon.get(i).z;
+        } else {
+          strings[i] = "missing";
+        }
+        
+      }
+      saveStrings("strings.txt",strings);
 
       locDiff = PVector.sub(locMax,locMin);
       locFactor = locDiff.x/locDiff.y;
@@ -532,6 +545,7 @@ void finishSetup() {  //we need to receive a movie frame to use its info (durati
 }
 
 ArrayList<PVector> cleanLocations(ArrayList<PVector> list) {
+  //aqui
   PVector pre = new PVector(1000,1000);
   for (int i=0; i<list.size(); i++) {
     PVector curr = list.get(i);
@@ -546,7 +560,7 @@ ArrayList<PVector> cleanLocations(ArrayList<PVector> list) {
       }
       if (pre.x != 1000) {//not first valid value
         if (destination != null) {  //there is a next valid value
-          curr = new PVector(pre.x + (destination.x-pre.x)/(steps+1),pre.y + (destination.y-pre.y)/(steps+1));
+          curr = new PVector(pre.x + (destination.x-pre.x)/(steps+1),pre.y + (destination.y-pre.y)/(steps+1),pre.z + (destination.z-pre.z)/(steps+1));
         } else {  //no next valid value
           curr = pre.copy();
         } 
