@@ -8,7 +8,7 @@ import processing.svg.*;
 //Customisable
 //IMPORTANT
 //NOTE: remember to set the proper sketch size for your video in setup()
-String[] filenames = {"GPFR0079","GF010079"};//file to search for, common to all files. Add more filenames separated by commas if you want to merge them first
+String[] filenames = {"GPFR0079","GF010079"};//file to search for, common to all files. Add more filename strings separated by commas if you want to merge them first
 float vFov = 69.7;
 //vertical field of view in degrees. H5 Session 16:9 = 69.7 |||||| 4:3 = 94.5  https://gopro.com/help/articles/Question_Answer/HERO5-Session-Field-of-View-FOV-Information
 // H5 Black: https://gopro.com/help/articles/Question_Answer/HERO5-Black-Field-of-View-FOV-Information
@@ -524,6 +524,7 @@ void finishSetup() {  //we need to receive a movie frame to use its info (durati
       }
       svg.dispose();
       svg.endDraw();
+
     }
   }
   
@@ -721,9 +722,7 @@ void draw() {
       
       PVector gpsDisplay = new PVector(0,0,0);  //will pass it to the display function
       if (gpsLastRow < gpsTable.getRowCount()) {
-        
         ///////////////////////////////////////
-        
         float gpsFrameTime = 0;//will remember total time of frame, independent of framerate, just in case
         ArrayList<float[]> gpsVectors = new ArrayList<float[]>();  //store the data to apply it proportionally after looping through all valid rows, for displaying it. Will be in rad/s, while the one for stabilisation (rotation) is in rad. so better not mixed
         while (float(gpsTable.getRow(gpsLastRow).getString("Milliseconds")) < currentMilliseconds) {  //get rows under our time
@@ -762,7 +761,7 @@ void draw() {
         }
 
       } else {
-        
+        gpsDisplay = cleanLatLon.get(cleanLatLon.size()-1).copy();
         if (CSVinstead) {
           println("Finished gps CSV");
           finishedCSVs++;
@@ -884,12 +883,13 @@ void draw() {
           float average = total/AEgForces.length;
           newRowG.setFloat(2, average);
           
-          newRowLoc.setFloat(2,gpsDisplay.x);
-          newRowLoc.setFloat(3,gpsDisplay.y);
-          newRowLoc.setFloat(4,gpsDisplay.z);
-          
-          gpsFramesArr.add(gpsDisplay);
-          
+          if (!(gpsDisplay.x == 0 && gpsDisplay.y == 0 && gpsDisplay.y == 0)) {
+            newRowLoc.setFloat(2,gpsDisplay.x);
+            newRowLoc.setFloat(3,gpsDisplay.y);
+            newRowLoc.setFloat(4,gpsDisplay.z);
+            gpsFramesArr.add(gpsDisplay);
+          }
+
           //rpms
           for (int i=AErpms.length-1; i>0 ; i--) {
             AErpms[i] = AErpms[i-1];
