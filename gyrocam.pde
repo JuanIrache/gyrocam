@@ -486,8 +486,8 @@ void finishSetup() {  //we need to receive a movie frame to use its info (durati
     
     if (gpsTable.getRowCount() > 1) {
       locPre = null;
-      locMax = new PVector(-180f,-90f);
-      locMin = new PVector(180f,90f);
+      locMax = new PVector(-180f,-85f);
+      locMin = new PVector(180f,85f);
       for (TableRow row : gpsTable.rows()) {
         PVector curr = new PVector(row.getFloat("Longitude"),row.getFloat("Latitude"),row.getFloat("Altitude"));
         int accuracy = row.getInt("GpsAccuracy");
@@ -1026,11 +1026,7 @@ void displayData(PVector g,PVector a, float t, float v, PVector gp) {  //display
 
 void displayNonPritableData() {
   String txt = "";
-  if (!CSVinstead) {  //if we want images
-      txt = "currentFrame: "+(currentFrame-firstDataFrame)+" of "+(totalFrames);
-    } else {  //if we want a full csv totalframes is not precise
-      txt = "currentFrame: "+(currentFrame-firstDataFrame)+" of ~"+(totalFrames);
-    }
+    txt = nfc(constrain(100*(currentFrame-firstDataFrame)/(totalFrames),0,100),0)+"%";
     int shadow = 1;//distance to shadow
     textSize(12);
     textAlign(LEFT,BOTTOM);  
