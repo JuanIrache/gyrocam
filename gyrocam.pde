@@ -91,7 +91,7 @@ PVector locMax;
 PVector locMin;
 
 void setup() {
-  size(1920, 1080);  //if exporting images, needs the same ratio as the input usable area, 16:9 4:3 etc
+  size(1280, 720);  //if exporting images, needs the same ratio as the input usable area, 16:9 4:3 etc
   imageMode(CENTER);  //draw from centre
   if (realHeight == 0) {
     realHeight = height;
@@ -566,12 +566,6 @@ ArrayList<PVector> cleanLocations(ArrayList<PVector> list) {
 void draw() {
   
   if (setupFinished && (areFramesSaved || CSVinstead)) {  //process if all encesary info is loaded
-    if (!CSVinstead) {  //if we want images
-      println("currentFrame: "+(currentFrame-firstDataFrame)+" of "+(totalFrames));
-    } else {  //if we want a full csv totalframes is not precise
-      println("currentFrame: "+(currentFrame-firstDataFrame)+" of ~"+(totalFrames));
-    }
-    
     File stillsFile = null;
     int frameToLoad = 0;
     frameToLoad = currentFrame;
@@ -755,7 +749,7 @@ void draw() {
             gpsDisplay.y = lerp(cleanLatLon.get(gpsLastRow).y, cleanLatLon.get(gpsLastRow+1).y, lerping);
             gpsDisplay.z = lerp(cleanLatLon.get(gpsLastRow).z, cleanLatLon.get(gpsLastRow+1).z, lerping);
           } else if (gpsLastRow+1 >= gpsTable.getRowCount()) {
-            gpsDisplay = cleanLatLon.get(gpsLastRow).copy();
+            gpsDisplay = cleanLatLon.get(gpsLastRow-1).copy();
           } else {
             gpsDisplay = cleanLatLon.get(gpsLastRow+1).copy();
           }
@@ -957,6 +951,7 @@ void draw() {
       if (!embedData) {  //print data on screen if not printed on image
         displayData(gyroDisplay,acclDisplay, tempDisplay, vibrDisplay,gpsDisplay);  //display metadata after saving the image
       }
+      displayNonPritableData();
       currentFrame++;  //next frame
     } else {  //end of video
       println("Video finished");
@@ -990,6 +985,7 @@ void displayData(PVector g,PVector a, float t, float v, PVector gp) {  //display
     text(text, 10, 30); //then text
     stroke(255,10);
     strokeWeight(1);
+    pushMatrix();
     translate(width-60-height/3,height-30-height/3);
     locPre = null;
     for (int i=0; i<cleanLatLon.size();i++) {
@@ -1024,7 +1020,24 @@ void displayData(PVector g,PVector a, float t, float v, PVector gp) {  //display
         }
         pre = curr.copy();
       }
+      popMatrix();
   }
+}
+
+void displayNonPritableData() {
+  String txt = "";
+  if (!CSVinstead) {  //if we want images
+      txt = "currentFrame: "+(currentFrame-firstDataFrame)+" of "+(totalFrames);
+    } else {  //if we want a full csv totalframes is not precise
+      txt = "currentFrame: "+(currentFrame-firstDataFrame)+" of ~"+(totalFrames);
+    }
+    int shadow = 1;//distance to shadow
+    textSize(12);
+    textAlign(LEFT,BOTTOM);  
+    fill(0);
+    text(txt, 10+shadow, height-30+shadow); //draw shadow first
+    fill(255);
+    text(txt, 10, height-30); //then text
 }
 
 void movieEvent(Movie m) { //when a frame is ready
