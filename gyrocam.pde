@@ -1,5 +1,4 @@
 //To export GoPro metadata: https://tailorandwayne.com/GPMD2CSV
-
 //TODO
 
 import processing.video.*;
@@ -323,9 +322,7 @@ void setup() {
   }
 }
 
-
 void draw() {
-  
   if (setupFinished && (areFramesSaved || CSVinstead)) {  //process if all encesary info is loaded
     File stillsFile = null;
     int frameToLoad = 0;
