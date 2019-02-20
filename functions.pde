@@ -31,14 +31,21 @@ Table addExtraFiles(Table table, String s) {
 void finishSetup() {  //we need to receive a movie frame to use its info (duration, framerate...) before we finish loading
   File csvFile = new File(dataPath(filenames[0]+"-gyro.csv"));  //try to load CSV file
   if (csvFile.exists()) {
-    table = loadTable(filenames[0]+"-gyro.csv", "header");
-    table = addExtraFiles(table,"gyro");
+    gyroTable = loadTable(filenames[0]+"-gyro.csv", "header");
+    gyroTable = addExtraFiles(gyroTable,"gyro");
+    if (changeAxis) {
+      Table tempTable = gyroTable.copy();
+      for (int i=0; i<gyroTable.getRowCount(); i++) {
+        gyroTable.setFloat(i,"GyroX",tempTable.getFloat(i,"GyroZ"));
+        gyroTable.setFloat(i,"GyroZ",tempTable.getFloat(i,"GyroX"));
+      }
+    }
     //find first row to analyse
     float currentMilliseconds = ((float(firstDataFrame))*(1000f/goproRate))+offset;//time we start at
     int checkRow = 0;
-    while (float(table.getRow(checkRow).getString("Milliseconds")) < currentMilliseconds) {  //get rows under our time
+    while (float(gyroTable.getRow(checkRow).getString("Milliseconds")) < currentMilliseconds) {  //get rows under our time
       checkRow++;
-      lastMilliseconds = float(table.getRow(checkRow).getString("Milliseconds"));  //save current time
+      lastMilliseconds = float(gyroTable.getRow(checkRow).getString("Milliseconds"));  //save current time
     }
     lastRow = checkRow;
     currentFrame = firstDataFrame;
@@ -64,7 +71,7 @@ void finishSetup() {  //we need to receive a movie frame to use its info (durati
         println("No video file "+filenames[0]+videoFileType+" found in /data");
       }
     } else {  //if exporting full csv
-      totalFrames = int(int(table.getRow(table.getRowCount()-1).getString("Milliseconds"))*goproRate/1000);
+      totalFrames = int(int(gyroTable.getRow(gyroTable.getRowCount()-1).getString("Milliseconds"))*goproRate/1000);
     }
   } else {
     println("No "+filenames[0]+"-gyro.csv file found in /data");
@@ -128,10 +135,10 @@ void finishSetup() {  //we need to receive a movie frame to use its info (durati
           cleanLatLon.add(null);
         }
       }
-      
       cleanLatLon = cleanLocations(cleanLatLon);
       
-      //aqui remove this debugging
+      if (cleanLatLon.size() > 1) {
+        //aqui remove this debugging
       String[] strings = new String[cleanLatLon.size()-1];
       for (int i=0; i<cleanLatLon.size()-1; i++) {
         if (cleanLatLon.get(i) != null) {
@@ -164,7 +171,7 @@ void finishSetup() {  //we need to receive a movie frame to use its info (durati
       }
       svg.dispose();
       svg.endDraw();
-
+      }
     }
   }
   
@@ -174,6 +181,7 @@ void finishSetup() {  //we need to receive a movie frame to use its info (durati
 ArrayList<PVector> cleanLocations(ArrayList<PVector> list) {
   //aqui
   PVector pre = new PVector(1000,1000);
+  boolean empty = true;
   for (int i=0; i<list.size(); i++) {
     PVector curr = list.get(i);
     if (curr == null) {
@@ -199,9 +207,13 @@ ArrayList<PVector> cleanLocations(ArrayList<PVector> list) {
       }
       
     }
-    if (curr != null) pre = curr.copy();
+    if (curr != null) {
+      empty = false;
+      pre = curr.copy();
+    }
     list.set(i,curr);
   }
+  if (empty) return new ArrayList<PVector>();
   return list;
 }
 
@@ -284,7 +296,7 @@ void movieEvent(Movie m) { //when a frame is ready
   m.read();
   if (!finishingSetup) {//finish loading everything according to the movie info
     finishingSetup = true;
-    goproRate = myMovie.frameRate;  //we can now set the framerate based on the video file
+    goproRate = int(myMovie.frameRate);  //we can now set the framerate based on the video file
     validFrame = firstDataFrame;  //frame count taking offsets into account
     if (!dataVideoSync) {
       validFrame -= firstDataFrame;

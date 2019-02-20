@@ -1,4 +1,4 @@
-Table table;  //will contain the input gyro file
+Table gyroTable;  //will contain the input gyro file
 Table acclTable;  //will contain the input accelerometer file
 Table gpsTable;  //will contain the input gps file
 ArrayList<PVector> cleanLatLon = new ArrayList<PVector>(); //will contain cleaner gps data

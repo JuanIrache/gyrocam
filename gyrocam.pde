@@ -7,14 +7,14 @@ import processing.svg.*;
 //Customisable
 //IMPORTANT
 //NOTE: remember to set the proper sketch size for your video in setup()
-String[] filenames = {"GPFR0079","GF010079"};//file to search for, common to all files. Add more filename strings separated by commas if you want to merge them first
-float vFov = 69.7;
+String[] filenames = {"GX010059"};//file to search for, common to all files. Add more filename strings separated by commas if you want to merge them first
+float vFov = 69.5;
 //vertical field of view in degrees. H5 Session 16:9 = 69.7 |||||| 4:3 = 94.5  https://gopro.com/help/articles/Question_Answer/HERO5-Session-Field-of-View-FOV-Information
 // H5 Black: https://gopro.com/help/articles/Question_Answer/HERO5-Black-Field-of-View-FOV-Information
 
 //OPTIONAL
 boolean CSVinstead = true;  //export csv with relevant values for use in After Effects or anywhere else. Differs from the input csv because the calculations are applied per frame
-float goproRate = 25f;  //framerate of video will be overwritten if a video file with a different framerate is present. Important when working with frames only or csv only
+float goproRate = 25;  //framerate of video will be overwritten if a video file with a different framerate is present. Important when working with frames only or csv only
 PVector drift = new PVector(-0.0115070922,0.0090878531,0.0029803664); //rads per second that we should compensate. Might vary per camera and situation. Measured by sitting still and looking at the average values in the csv.
 //The H5 does not have enough sensors to guess the absolute orientation, and there appears to be some drift caused by small inaccuracies that add up so an always flat horizon is only possible by manually adjusting drift, maybe)
 //the gyro sensor maxes out at 8.7262316911 rad/s (83.33rpm) above that, calculations are wrong
@@ -26,20 +26,21 @@ int firstDataFrame = 0;  //first frame to analyse from original GoPro file
 boolean dataVideoSync = true; // False to start frames at 0 when stills have been extracted as a section of the original GoPro file
 float rotationZoffset = radians(0);  //if horizon is generally tilted, compensate here. Radians
 float realHeight = 0;//zero for auto (non optically corrected clips) //real use in pixels of the fov in the input file (useful when optically compensated) - (check in After Effects)
-int offset = -30;//in milliseconds, can be float for better adjustment. difference in time between frames and csvs
+int offset = 0;//in milliseconds, can be float for better adjustment. difference in time between frames and csvs
 String fileType = ".jpg";//extension
 String videoFileType = ".mp4";//if loading from a video
 int digits = 3;//number of zeros. Will be overwritten if frames are extracted from the video file
 boolean rescale = false;  //scale to sketch size, independent of magnify. Useful when source is larger than sketch
-float smooth = .95;//reduce x and y rotation progressively, 1 for not smoothing (image goes back to centre after a correction)
-float smoothZ= .95;//reduce z rotation progressively, 1 = no reduction, 0 = no rotation
-float limitY = .02;//limit movement per axis to percentage of image/angle. -1 = no limit. ie, avoid displaying too much margins
-float limitX = .03;//if optically compensated, X can be wider
-float limitZ = .06;//not really a percentage, -1 FOR FLAT HORIZON (MotoGP gyrocam style.
+float smooth = 1;//reduce x and y rotation progressively, 1 for not smoothing (image goes back to centre after a correction)
+float smoothZ= 1;//reduce z rotation progressively, 1 = no reduction, 0 = no rotation
+float limitY = -1;//limit movement per axis to percentage of image/angle. -1 = no limit. ie, avoid displaying too much margins
+float limitX = -1;//if optically compensated, X can be wider
+float limitZ = -1;//not really a percentage, -1 FOR FLAT HORIZON (MotoGP gyrocam style.
 float[] AEgForces = new float[5];  //we will average data for smoothing
 float[] AErpms = new float[5];  //we will average data for smoothing
 float[] AEvibrhzs = new float[30];  //we will average data for smoothing
 float vibrTreshold = 1; //subjective, when to start considering an acceleration change a vibration
+boolean changeAxis = true;//axes changed from Hero5 to Hero6 and Fusion, set this to false for Hero5
 
 void setup() {
   size(1280, 720);  //if exporting images, needs the same ratio as the input usable area, 16:9 4:3 etc
@@ -339,13 +340,13 @@ void draw() {
       }
       float currentMilliseconds = ((float(currentFrame+1))*(1000f/goproRate))+offset;//time we are at
       PVector gyroDisplay = new PVector(0,0,0);  //will pass it to the display function
-      if (lastRow < table.getRowCount()) {  //if we still have rows
+      if (lastRow < gyroTable.getRowCount()) {  //if we still have rows
         float gyroFrameTime = 0;//will remember total time of frame, independent of framerate, just in case
         ArrayList<float[]> gyroVectors = new ArrayList<float[]>();  //store the data to apply it proportionally after looping through all valid rows, for displaying it. Will be in rad/s, while the one for stabilisation (rotation) is in rad. so better not mixed
-        while (float(table.getRow(lastRow).getString("Milliseconds")) < currentMilliseconds) {  //get rows under our time
-          float millisecondsDifference = (float(table.getRow(lastRow).getString("Milliseconds"))-lastMilliseconds)/1000f;  //how much time since last gyro?
-          lastMilliseconds = float(table.getRow(lastRow).getString("Milliseconds"));  //save current time
-          PVector preRotation = new PVector(float(table.getRow(lastRow).getString("GyroX")),float(table.getRow(lastRow).getString("GyroY")),float(table.getRow(lastRow).getString("GyroZ"))); //calculate perfect compensation of movements, (radians/time)*time passed
+        while (float(gyroTable.getRow(lastRow).getString("Milliseconds")) < currentMilliseconds) {  //get rows under our time
+          float millisecondsDifference = (float(gyroTable.getRow(lastRow).getString("Milliseconds"))-lastMilliseconds)/1000f;  //how much time since last gyro?
+          lastMilliseconds = float(gyroTable.getRow(lastRow).getString("Milliseconds"));  //save current time
+          PVector preRotation = new PVector(float(gyroTable.getRow(lastRow).getString("GyroX")),float(gyroTable.getRow(lastRow).getString("GyroY")),float(gyroTable.getRow(lastRow).getString("GyroZ"))); //calculate perfect compensation of movements, (radians/time)*time passed
           preRotation.mult(millisecondsDifference);
           preRotation.sub(PVector.mult(drift, millisecondsDifference));  //compensate for drift
           PVector smoother = new PVector(1,1,1);  //if all goes well, apply fully
@@ -367,11 +368,11 @@ void draw() {
           rotation.x += smoother.x*preRotation.x;   //apply rotations
           rotation.y += smoother.y*preRotation.y;
           rotation.z += smoother.z*preRotation.z; 
-          float[] gyroRow = { float(table.getRow(lastRow).getString("GyroX")),float(table.getRow(lastRow).getString("GyroY")),float(table.getRow(lastRow).getString("GyroZ")),millisecondsDifference};  //store all the relevant data of the row
+          float[] gyroRow = { float(gyroTable.getRow(lastRow).getString("GyroX")),float(gyroTable.getRow(lastRow).getString("GyroY")),float(gyroTable.getRow(lastRow).getString("GyroZ")),millisecondsDifference};  //store all the relevant data of the row
           gyroVectors.add( gyroRow );  //save in the arraylist
           lastRow++;  //next row
           gyroFrameTime += millisecondsDifference;
-          if (lastRow >= table.getRowCount()) {
+          if (lastRow >= gyroTable.getRowCount()) {
             println("Gyro CSV finished before video");
             break;
           } 
@@ -478,7 +479,8 @@ void draw() {
       }
       
       PVector gpsDisplay = new PVector(0,0,0);  //will pass it to the display function
-      if (gpsLastRow < gpsTable.getRowCount()) {
+      if (cleanLatLon.size() > 1) {
+        if (gpsLastRow < gpsTable.getRowCount()) {
         ///////////////////////////////////////
         float gpsFrameTime = 0;//will remember total time of frame, independent of framerate, just in case
         ArrayList<float[]> gpsVectors = new ArrayList<float[]>();  //store the data to apply it proportionally after looping through all valid rows, for displaying it. Will be in rad/s, while the one for stabilisation (rotation) is in rad. so better not mixed
@@ -529,6 +531,8 @@ void draw() {
           println("Skipping CSV");
         }
       }
+      }
+
       
       TableRow newRowPos = null;
       TableRow newRowRot = null;
