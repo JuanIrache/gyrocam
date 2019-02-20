@@ -105,13 +105,13 @@ void finishSetup() {  //we need to receive a movie frame to use its info (durati
     //load gps data
     float currentMilliseconds = ((float(firstDataFrame))*(1000f/goproRate))+offset;//time we start at
     int checkRow = 0;
-    while (float(gpsTable.getRow(checkRow).getString("Milliseconds")) < currentMilliseconds) {  //get rows under our time
-      checkRow++;
-      gpsLastMilliseconds = float(gpsTable.getRow(checkRow).getString("Milliseconds"));  //save current time
-    }
-    gpsLastRow = checkRow;
-    
-    if (gpsTable.getRowCount() > 1) {
+      if (gpsTable.getRowCount() > 1) {
+        while (float(gpsTable.getRow(checkRow).getString("Milliseconds")) < currentMilliseconds) {  //get rows under our time
+          checkRow++;
+          gpsLastMilliseconds = float(gpsTable.getRow(checkRow).getString("Milliseconds"));  //save current time
+        }
+
+      gpsLastRow = checkRow;
       locPre = null;
       locMax = new PVector(-180f,-85f);
       locMin = new PVector(180f,85f);
