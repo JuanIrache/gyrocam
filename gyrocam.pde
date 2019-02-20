@@ -519,7 +519,7 @@ void draw() {
           }
         }
 
-      } else {
+      } else if (gpsTable.getRowCount() > 1) {
         gpsDisplay = cleanLatLon.get(cleanLatLon.size()-1).copy();
         if (CSVinstead) {
           println("Finished gps CSV");
