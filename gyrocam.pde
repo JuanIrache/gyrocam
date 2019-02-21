@@ -7,10 +7,11 @@ import processing.svg.*;
 //Customisable
 //IMPORTANT
 //NOTE: remember to set the proper sketch size for your video in setup()
-String[] filenames = {"GX010059"};//file to search for, common to all files. Add more filename strings separated by commas if you want to merge them first
+String[] filenames = {"GPFR0079","GF010079"};//file to search for, common to all files. Add more filename strings separated by commas if you want to merge them first
 float vFov = 69.5;
 //vertical field of view in degrees. H5 Session 16:9 = 69.7 |||||| 4:3 = 94.5  https://gopro.com/help/articles/Question_Answer/HERO5-Session-Field-of-View-FOV-Information
 // H5 Black: https://gopro.com/help/articles/Question_Answer/HERO5-Black-Field-of-View-FOV-Information
+// Hero 7 fields of view: https://gopro.com/help/articles/question_answer/hero7-field-of-view-fov-information
 
 //OPTIONAL
 boolean CSVinstead = true;  //export csv with relevant values for use in After Effects or anywhere else. Differs from the input csv because the calculations are applied per frame
@@ -40,7 +41,7 @@ float[] AEgForces = new float[5];  //we will average data for smoothing
 float[] AErpms = new float[5];  //we will average data for smoothing
 float[] AEvibrhzs = new float[30];  //we will average data for smoothing
 float vibrTreshold = 1; //subjective, when to start considering an acceleration change a vibration
-boolean changeAxis = true;//axes changed from Hero5 to Hero6 and Fusion, set this to false for Hero5
+boolean changeAxis = true;//axes changed from Hero5 to Hero6 and Fusion, set this to false for Hero5. Depending on each camera and how you use the data, you might want to change the sign +/- of the axis too. For reference: https://github.com/gopro/gpmf-parser#hero5-black-and-session
 
 void setup() {
   size(1280, 720);  //if exporting images, needs the same ratio as the input usable area, 16:9 4:3 etc
