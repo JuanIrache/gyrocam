@@ -1,6 +1,6 @@
 # gyrocam
 
-Processing sketch for working with GoPro metadata (Hero5 and beyond), previously extracted using my GPMD2CSV tool http://tailorandwayne.com/GPMD2CSV.zip (Source: https://github.com/JuanIrache/gopro-utils )
+Processing sketch for working with GoPro metadata (Hero5 and beyond), previously extracted using my GPMD2CSV tool https://tailorandwayne.com/gopro-telemetry-extractor (Source: https://github.com/JuanIrache/gopro-utils )
 
 It was created specifically for this project: https://youtu.be/bg8B0Hl_au0 (Data+Stabilisation)
 
