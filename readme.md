@@ -1,6 +1,6 @@
 # gyrocam
 
-Processing sketch for working with GoPro metadata (Hero5 and beyond), previously extracted using my GoPro Telemetry Extractor https://tailorandwayne.com/gopro-telemetry-extractor/ (Source: https://github.com/JuanIrache/gopro-utils )
+Processing sketch for working with GoPro metadata (Hero5 and beyond), previously extracted using my GoPro Telemetry Extractor https://tailorandwayne.com/gopro-telemetry-extractor/ (JavaScript extraction tools: https://github.com/JuanIrache/gopro-telemetry )
 
 It was created specifically for this project: https://youtu.be/bg8B0Hl_au0 (Data+Stabilisation)
 
