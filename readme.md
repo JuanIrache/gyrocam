@@ -24,4 +24,4 @@ This can certainly be improved, maybe turned into a library...
 
 Once your data is exported to csv, open the file, copy the content and you can paste it to an After Effects layer.
 
-Here are some other projects of mine that you might find interesting: http://tailorandwayne.com/coding-projects/
+Here are some other projects of mine that you might find interesting: https://prototyping.barcelona/
